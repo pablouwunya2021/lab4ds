@@ -19,8 +19,17 @@ from src.config import FECHAS, LAGOS
 from src.descarga import ruta_indices
 from src.evalscripts import BANDAS_INDICES, CLP_MAXIMO
 
-# Valores de clorofila-a fuera de este rango se consideran artefactos del
-# ajuste polinómico (el NDCI satura en píxeles de orilla y en reflejos).
+# Tratamiento de los valores fuera de rango del polinomio de clorofila-a.
+#
+# En agua muy limpia el NDCI se vuelve negativo y el polinomio devuelve valores
+# negativos, que físicamente no existen. Esos píxeles NO se descartan: se
+# recortan a cero, porque un negativo significa "clorofila por debajo del
+# límite de detección", no "dato inválido". Descartarlos sesgaría el promedio
+# hacia arriba justo en los lagos y las fechas más limpios, que es exactamente
+# donde el sesgo cambiaría las conclusiones.
+#
+# Por arriba sí se descarta: por encima de este valor el ajuste ya no es
+# fiable y suele corresponder a píxeles de orilla o a reflejos especulares.
 CHL_MIN, CHL_MAX = 0.0, 300.0
 
 # Umbral de floración. El script de CyanoLakes cambia a tonos verdes brillantes
@@ -125,8 +134,8 @@ def cargar_escena(clave_lago: str, fecha: str) -> Escena | None:
     # valor físicamente plausible.
     valido = bandas["datamask"] > 0
     sin_nube = bandas["clp"] <= CLP_MAXIMO
-    chl = bandas["chl"]
-    rango = np.isfinite(chl) & (chl >= CHL_MIN) & (chl <= CHL_MAX)
+    chl = np.clip(bandas["chl"], CHL_MIN, None)
+    rango = np.isfinite(chl) & (chl <= CHL_MAX)
 
     mascara = mascara_lago(clave_lago) & valido & sin_nube & rango
 
