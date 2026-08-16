@@ -1,0 +1,19 @@
+# Credenciales — NUNCA subir al repositorio
+.env
+
+# Entorno virtual
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Datos crudos descargados (pesados, reproducibles con src/descarga.py)
+data/raw/*.tif
+data/raw/*.tiff
+data/cache/
+
+# Sistema
+.DS_Store
