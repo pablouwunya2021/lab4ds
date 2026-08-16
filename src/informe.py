@@ -342,6 +342,12 @@ def metodologia(estilos, datos) -> list:
             estilos,
         ),
 
+        *figura("03_vista_cyanolakes_Amatitlan.png",
+                "A la izquierda, el lago de Amatitlán como lo vería el ojo humano desde el "
+                "satélite. A la derecha, el mismo día procesado con el índice: el azul es "
+                "agua limpia y los verdes, amarillos y rojos indican cantidades crecientes "
+                "de clorofila-a.", estilos),
+
         Paragraph("Qué imágenes se analizaron", estilos["h2"]),
         Paragraph(
             f"Se trabajó con el calendario de fechas fijado para el ejercicio: "
@@ -450,6 +456,12 @@ def seccion_espacial(estilos, datos) -> list:
         nombre = LAGOS[clave]["nombre"]
         elementos += [
             Paragraph(nombre, estilos["h2"]),
+            # La vista equivalente de Amatitlán ya se mostró como ejemplo en la
+            # sección de metodología; no hace falta repetirla aquí.
+            *(figura(f"03_vista_cyanolakes_{clave}.png",
+                     f"{nombre}: la imagen real y su procesamiento con el índice de "
+                     f"cianobacteria, en la fecha más afectada del período.", estilos)
+              if clave != "Amatitlan" else []),
             *figura(f"05_mapas_por_fecha_{clave}.png",
                     f"{nombre}: distribución de clorofila-a en cada fecha analizada.", estilos),
             PageBreak(),

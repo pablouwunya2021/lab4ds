@@ -139,6 +139,49 @@ def mapa_comparativo(clave_lago: str, escenas: list[Escena]) -> tuple[str, str]:
     return mejor.fecha, peor.fecha
 
 
+def figura_vista_original(clave_lago: str, escenas: list[Escena]) -> None:
+    """Color verdadero frente a la salida coloreada del script de CyanoLakes.
+
+    Es la misma vista que produce el Copernicus Browser, y sirve para que el
+    lector compruebe que lo que el análisis marca como floración se corresponde
+    con algo visible en la imagen real.
+    """
+    from src.descarga import ruta_cyano_rgb, ruta_rgb
+
+    medias = [float(np.nanmean(e.chl)) for e in escenas]
+    peor = escenas[int(np.argmax(medias))]
+
+    rutas = [
+        (ruta_rgb(clave_lago, peor.fecha), "Imagen en color real"),
+        (ruta_cyano_rgb(clave_lago, peor.fecha), "Script CyanoLakes de Sentinel Hub"),
+    ]
+    if not all(ruta.exists() for ruta, _ in rutas):
+        return
+
+    fig, ejes = plt.subplots(1, 2, figsize=(10.5, 4.8))
+    for eje, (ruta, titulo) in zip(ejes, rutas):
+        with rasterio.open(ruta) as src:
+            imagen = np.transpose(src.read([1, 2, 3]), (1, 2, 0))
+        eje.imshow(imagen)
+        eje.set_title(titulo, fontsize=10.5, pad=6)
+        eje.set_xticks([])
+        eje.set_yticks([])
+        eje.grid(False)
+        for spine in eje.spines.values():
+            spine.set_visible(False)
+
+    fig.suptitle(
+        f"{LAGOS[clave_lago]['nombre']} — {peor.fecha} (la fecha más afectada)",
+        fontsize=13, fontweight="bold", y=1.0,
+    )
+    fig.tight_layout()
+    guardar(
+        fig, DIR_FIGURAS / f"03_vista_cyanolakes_{clave_lago}.png",
+        nota="En la vista de la derecha, el azul indica agua limpia y los tonos verdes, "
+             "amarillos y rojos indican concentraciones crecientes de clorofila-a.",
+    )
+
+
 def mapa_persistencia(clave_lago: str, escenas: list[Escena]) -> np.ndarray:
     """Frecuencia con que cada punto del lago supera el umbral de floración.
 
@@ -196,6 +239,13 @@ def mapa_interactivo(clave_lago: str, escenas: list[Escena], frecuencia: np.ndar
 
     def capa(datos, transform, crs, nombre, cmap, normalizacion, visible):
         reproyectado, limites = _a_wgs84(datos, transform, crs)
+
+        # El mapa lleva una capa por fecha incrustada como imagen; a resolución
+        # completa el HTML pesaría decenas de megabytes. Para verlo en pantalla
+        # basta con ~900 px de ancho.
+        paso = max(1, int(np.ceil(reproyectado.shape[1] / 900)))
+        reproyectado = reproyectado[::paso, ::paso]
+
         rgba = cmap(normalizacion(reproyectado))
         rgba[..., 3] = np.where(np.isfinite(reproyectado), 0.85, 0.0)
 
@@ -286,6 +336,7 @@ def ejecutar(escenas_por_lago: dict[str, list[Escena]]) -> dict[str, np.ndarray]
     persistencias = {}
     for clave, escenas in escenas_por_lago.items():
         print(f"  {LAGOS[clave]['nombre']}")
+        figura_vista_original(clave, escenas)
         mapas_todas_las_fechas(clave, escenas)
         mapa_comparativo(clave, escenas)
         frecuencia = mapa_persistencia(clave, escenas)
