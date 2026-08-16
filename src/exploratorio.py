@@ -14,6 +14,7 @@ import pandas as pd
 from src.carga import UMBRAL_FLORACION, Escena
 from src.config import DIR_FIGURAS, DIR_TABLAS, LAGOS
 from src.estilo import COLOR_LAGO, CRITICO, TINTA_SEC, TINTA_TENUE, guardar
+from src.formato import pct
 from src.temporal import UMBRAL_INTENSO
 
 LIMITE_HISTOGRAMA = 60.0
@@ -42,7 +43,9 @@ def figura_distribuciones(clave_lago: str, escenas: list[Escena]) -> None:
                  zorder=len(escenas) - i)
 
         mediana = float(np.median(valores))
-        eje.plot([mediana, mediana], [base, base + altura * 0.9],
+        # La marca de la mediana llega hasta la altura de la curva en ese punto.
+        alto_mediana = float(np.interp(mediana, centros, altura))
+        eje.plot([mediana, mediana], [base, base + alto_mediana],
                  color=TINTA_SEC, linewidth=1.3, zorder=len(escenas) - i)
         eje.text(LIMITE_HISTOGRAMA * 1.02, base + 0.25,
                  f"mediana {mediana:.1f}", fontsize=8.5, color=TINTA_TENUE, va="center")
@@ -157,8 +160,8 @@ def interpretar(serie: pd.DataFrame, percentiles: pd.DataFrame) -> str:
 
         lineas.append(
             f"**{nombre}.** La fecha con mayor extensión afectada fue {peor['fecha']}, "
-            f"con el {peor['pct_area_alta']:.1f} % de la superficie por encima del "
-            f"umbral y un {peor['pct_area_intensa']:.1f} % en floración intensa. "
+            f"con el {pct(peor['pct_area_alta'])} de la superficie por encima del "
+            f"umbral y un {pct(peor['pct_area_intensa'])} en floración intensa. "
             f"En una fecha típica, el 10 % más afectado del lago está por encima de "
             f"{p['p90'].median():.1f} µg/L, frente a una mediana general de "
             f"{p['p50'].median():.1f} µg/L. {forma}."

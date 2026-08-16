@@ -15,6 +15,7 @@ from scipy import stats
 from src.carga import UMBRAL_FLORACION, Escena
 from src.config import DIR_FIGURAS, DIR_TABLAS, LAGOS
 from src.estilo import COLOR_LAGO, MARCADOR_LAGO, TINTA_SEC, TINTA_TENUE, guardar
+from src.formato import pct
 from src.temporal import UMBRAL_INTENSO
 
 # Contexto de cuenca. Son datos de referencia publicados sobre ambos lagos, no
@@ -71,6 +72,7 @@ def resumen_por_lago(serie: pd.DataFrame) -> pd.DataFrame:
                 # Extensión
                 "pct_area_alta_media": d["pct_area_alta"].mean(),
                 "pct_area_alta_max": d["pct_area_alta"].max(),
+                "pct_area_intensa_max": d["pct_area_intensa"].max(),
                 # Variabilidad
                 "desv_std": d["chl_medio"].std(ddof=0),
                 "coef_variacion": d["chl_medio"].std(ddof=0) / max(d["chl_medio"].mean(), 1e-9),
@@ -208,10 +210,12 @@ def interpretar(resumen: pd.DataFrame, prueba: dict, serie: pd.DataFrame) -> str
         f"{int(at['fechas_con_floracion'])} de {int(at['n_fechas'])} fechas "
         f"({at['frec_floracion_pct']:.0f} %) y Amatitlán en "
         f"{int(am['fechas_con_floracion'])} de {int(am['n_fechas'])} "
-        f"({am['frec_floracion_pct']:.0f} %). Considerando solo episodios intensos "
-        f"(más de {UMBRAL_INTENSO:.0f} µg/L de promedio), fueron "
-        f"{int(at['fechas_intensas'])} y {int(am['fechas_intensas'])} fechas "
-        f"respectivamente.",
+        f"({am['frec_floracion_pct']:.0f} %). Conviene matizar esta cifra: el promedio "
+        f"de todo el lago es una medida exigente, porque una bahía en floración pesa "
+        f"poco frente al resto del espejo de agua. Mirando la floración intensa "
+        f"(más de {UMBRAL_INTENSO:.0f} µg/L) por superficie y no por promedio, Atitlán "
+        f"llegó como máximo a un {pct(at['pct_area_intensa_max'])} del lago afectado en "
+        f"una misma fecha y Amatitlán a un {pct(am['pct_area_intensa_max'])}.",
 
         f"**Extensión.** En una fecha típica, el {at['pct_area_alta_media']:.0f} % de la "
         f"superficie de Atitlán y el {am['pct_area_alta_media']:.0f} % de la de Amatitlán "

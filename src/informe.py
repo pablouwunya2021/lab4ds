@@ -34,6 +34,7 @@ from reportlab.platypus import (
 from src.carga import UMBRAL_FLORACION
 from src.comparacion import CONTEXTO
 from src.config import DIR_FIGURAS, LAGOS, RAIZ
+from src.formato import pct
 from src.temporal import UMBRAL_INTENSO
 
 AUTORES = "Pablo Cabrera · Luis Mendoza"
@@ -103,6 +104,17 @@ def construir_estilos():
         textColor=colors.white,
     )
     return e
+
+
+MESES = [
+    "enero", "febrero", "marzo", "abril", "mayo", "junio",
+    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+]
+
+
+def fecha_larga(dia: date) -> str:
+    """Fecha en español, sin depender del locale del sistema."""
+    return f"{dia.day} de {MESES[dia.month - 1]} de {dia.year}"
 
 
 def marcar(texto: str) -> str:
@@ -221,7 +233,7 @@ def portada(estilos, datos) -> list:
         Paragraph(AUTORES, estilos["subtitulo"]),
         Spacer(1, 0.35 * cm),
         Paragraph(CURSO, estilos["portada_meta"]),
-        Paragraph(f"Laboratorio 4 — Análisis de datos geoespaciales<br/>{date.today():%d de %B de %Y}",
+        Paragraph(f"Laboratorio 4 — Análisis de datos geoespaciales<br/>{fecha_larga(date.today())}",
                   estilos["portada_meta"]),
         PageBreak(),
     ]
@@ -235,27 +247,31 @@ def resumen_ejecutivo(estilos, datos) -> list:
     peor_am = max((s for s in serie if s["lago"] == "Amatitlan"), key=lambda s: s["chl_medio"])
     peor_at = max((s for s in serie if s["lago"] == "Atitlan"), key=lambda s: s["chl_medio"])
 
+    razon = am["chl_medio"] / max(at["chl_medio"], 1e-9)
+
     puntos = [
-        f"<b>Amatitlán está permanentemente afectado.</b> Su nivel promedio de "
-        f"clorofila-a fue de {am['chl_medio']:.1f} µg/L y superó el umbral de floración "
-        f"en {int(am['fechas_con_floracion'])} de las {int(am['n_fechas'])} fechas "
-        f"analizadas. No es un problema de episodios aislados: es su estado habitual.",
+        f"<b>Los dos lagos están en situaciones muy distintas.</b> El nivel promedio de "
+        f"clorofila-a de Amatitlán ({am['chl_medio']:.1f} µg/L) es unas "
+        f"{razon:.0f} veces el de Atitlán ({at['chl_medio']:.1f} µg/L). La diferencia es "
+        f"estadísticamente sólida y se sostiene en todas las fechas analizadas.",
 
-        f"<b>Atitlán está mejor, pero no está limpio.</b> Su promedio fue de "
-        f"{at['chl_medio']:.1f} µg/L y superó el umbral en "
-        f"{int(at['fechas_con_floracion'])} de {int(at['n_fechas'])} fechas. "
-        f"Su comportamiento es más episódico: largos períodos aceptables interrumpidos "
-        f"por eventos puntuales.",
+        f"<b>Amatitlán presenta floración de forma recurrente.</b> Su promedio superó el "
+        f"umbral de floración en {int(am['fechas_con_floracion'])} de las "
+        f"{int(am['n_fechas'])} fechas, y en su peor fecha ({peor_am['fecha']}) el "
+        f"{pct(peor_am['pct_area_alta'])} del lago estaba por encima de ese umbral. "
+        f"Incluso en sus mejores fechas, una parte del lago se mantiene afectada.",
 
-        f"<b>Las peores fechas registradas</b> fueron el {peor_am['fecha']} en Amatitlán "
-        f"({peor_am['chl_medio']:.1f} µg/L de promedio, con el "
-        f"{peor_am['pct_area_alta']:.0f} % de la superficie afectada) y el "
-        f"{peor_at['fecha']} en Atitlán ({peor_at['chl_medio']:.1f} µg/L, "
-        f"{peor_at['pct_area_alta']:.0f} % de la superficie).",
+        f"<b>Atitlán se mantuvo en niveles bajos durante todo el período observado.</b> "
+        f"Su promedio nunca superó el umbral de floración y en su fecha más alta "
+        f"({peor_at['fecha']}, {peor_at['chl_medio']:.1f} µg/L) solo "
+        f"{pct(peor_at['pct_area_alta'])} de la superficie lo superaba. Esto no "
+        f"significa que el lago esté a salvo: significa que en estas 11 fechas concretas "
+        f"no se captó ningún episodio de floración.",
 
-        f"<b>El problema no se reparte de forma pareja dentro de cada lago.</b> Hay zonas "
-        f"que aparecen afectadas fecha tras fecha, lo que apunta a fuentes continuas de "
-        f"nutrientes y no a eventos climáticos pasajeros.",
+        f"<b>Dentro de cada lago, el problema tiene una geografía estable.</b> Hay zonas "
+        f"que aparecen entre las más afectadas fecha tras fecha, lo que apunta a fuentes "
+        f"continuas de nutrientes y no a eventos climáticos pasajeros. Son las zonas que "
+        f"conviene priorizar para el muestreo y la intervención.",
 
         f"<b>La diferencia entre ambos lagos tiene explicación física.</b> Amatitlán es "
         f"casi nueve veces más pequeño y diez veces menos profundo que Atitlán, pero "
@@ -450,6 +466,18 @@ def seccion_espacial(estilos, datos) -> list:
             "dos fechas se pueden comparar directamente a simple vista.",
             estilos["cuerpo"],
         ),
+        recuadro(
+            "Atención al leer los mapas",
+            "<b>Cada lago usa su propia escala de color.</b> Atitlán se mueve en valores "
+            "muy bajos y Amatitlán en valores mucho más altos; si ambos usaran la misma "
+            "escala, todos los mapas de Atitlán saldrían en blanco y no se vería nada de "
+            "su estructura interna. Por eso <b>un tono oscuro en el mapa de Atitlán no "
+            "equivale a un tono oscuro en el de Amatitlán</b>: siempre hay que mirar los "
+            "números de la barra de color. La comparación entre los dos lagos se hace más "
+            "adelante, con cifras.",
+            estilos, fondo=FONDO_ALERTA, borde=NARANJA,
+        ),
+        Spacer(1, 6),
     ]
 
     for clave in LAGOS:
@@ -620,10 +648,12 @@ def conclusiones(estilos, datos) -> list:
             f"({am['chl_medio']:.1f} µg/L de promedio, floración en "
             f"{am['frec_floracion_pct']:.0f} % de las fechas): su problema no es de alerta "
             f"temprana sino de saneamiento de la cuenca, y particularmente del río "
-            f"Villalobos. Atitlán presenta un nivel de fondo más bajo "
-            f"({at['chl_medio']:.1f} µg/L) con episodios puntuales: su problema sí es de "
-            f"vigilancia y respuesta rápida, para detectar los eventos mientras están "
-            f"empezando.",
+            f"Villalobos. Atitlán presenta un nivel de fondo bajo "
+            f"({at['chl_medio']:.1f} µg/L) sin episodios de floración en las fechas "
+            f"analizadas: su problema es de vigilancia sostenida, para detectar a tiempo "
+            f"un eventual episodio, y de prevención, porque al ser un lago sin salida "
+            f"superficial los nutrientes que entran se acumulan durante años antes de "
+            f"manifestarse.",
             estilos["cuerpo"],
         ),
         Paragraph(
@@ -664,6 +694,7 @@ def conclusiones(estilos, datos) -> list:
             )
         ],
 
+        PageBreak(),
         Paragraph("Limitaciones de este estudio", estilos["h2"]),
         *[
             Paragraph(t, estilos["vineta"], bulletText="•")

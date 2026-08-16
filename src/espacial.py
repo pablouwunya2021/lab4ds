@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import io
+import warnings
 
 import folium
 import matplotlib.pyplot as plt
@@ -20,6 +21,7 @@ from rasterio.warp import Resampling, calculate_default_transform, reproject
 
 from src.carga import UMBRAL_FLORACION, Escena
 from src.config import DIR_FIGURAS, DIR_MAPAS, LAGOS, RESOLUCION_M
+from src.formato import pct
 from src.estilo import (
     CMAP_CHL,
     CMAP_DIF,
@@ -30,10 +32,28 @@ from src.estilo import (
     norma_divergente,
 )
 
-# Escala fija de color para todos los mapas de un mismo lago: si cada mapa usara
-# su propia escala, dos fechas distintas se verían igual de "rojas" aunque una
-# tuviera el triple de clorofila, y la comparación visual sería engañosa.
-ESCALA_CHL = (0.0, 40.0)
+
+def escala_lago(escenas: list[Escena]) -> tuple[float, float]:
+    """Escala de color común a todos los mapas de un lago.
+
+    Es la misma para todas las fechas del lago: si cada mapa usara su propia
+    escala, dos fechas se verían igual de intensas aunque una tuviera el triple
+    de clorofila, y la comparación visual sería engañosa.
+
+    En cambio, **cada lago usa su propia escala**. Atitlán se mueve entre 0 y 2
+    µg/L y Amatitlán llega a decenas; forzar una escala común dejaría todos los
+    mapas de Atitlán en blanco y no se vería su estructura interna. La
+    comparación cuantitativa entre lagos se hace con las cifras y los gráficos
+    de la sección comparativa, no a ojo sobre los mapas.
+    """
+    valores = np.concatenate([e.valores for e in escenas])
+    tope = float(np.percentile(valores, 99))
+    # Se redondea hacia arriba a una cifra "limpia" para que la barra de color
+    # tenga marcas legibles.
+    for candidato in (2, 5, 10, 20, 40, 60, 100, 150, 200, 300):
+        if tope <= candidato:
+            return 0.0, float(candidato)
+    return 0.0, 300.0
 
 
 def _a_wgs84(arreglo: np.ndarray, transform, crs):
@@ -74,7 +94,7 @@ def _pintar(eje, datos: np.ndarray, cmap, norm, titulo: str):
     return imagen
 
 
-def mapas_todas_las_fechas(clave_lago: str, escenas: list[Escena]) -> None:
+def mapas_todas_las_fechas(clave_lago: str, escenas: list[Escena], escala) -> None:
     """Panel con la distribución de cianobacteria en cada fecha disponible."""
     n = len(escenas)
     columnas = min(4, n)
@@ -82,7 +102,7 @@ def mapas_todas_las_fechas(clave_lago: str, escenas: list[Escena]) -> None:
     fig, ejes = plt.subplots(filas, columnas, figsize=(3.1 * columnas, 3.35 * filas))
     ejes = np.atleast_1d(ejes).ravel()
 
-    norm = mcolors.Normalize(*ESCALA_CHL)
+    norm = mcolors.Normalize(*escala)
     imagen = None
     for eje, escena in zip(ejes, escenas):
         media = float(np.nanmean(escena.chl))
@@ -103,7 +123,7 @@ def mapas_todas_las_fechas(clave_lago: str, escenas: list[Escena]) -> None:
     guardar(fig, DIR_FIGURAS / f"05_mapas_por_fecha_{clave_lago}.png")
 
 
-def mapa_comparativo(clave_lago: str, escenas: list[Escena]) -> tuple[str, str]:
+def mapa_comparativo(clave_lago: str, escenas: list[Escena], escala) -> tuple[str, str]:
     """Compara la fecha más limpia con la más afectada y muestra la diferencia."""
     medias = [float(np.nanmean(e.chl)) for e in escenas]
     peor = escenas[int(np.argmax(medias))]
@@ -114,7 +134,7 @@ def mapa_comparativo(clave_lago: str, escenas: list[Escena]) -> tuple[str, str]:
     limite = float(np.percentile(np.abs(finitos), 98)) if finitos.size else 1.0
 
     fig, ejes = plt.subplots(1, 3, figsize=(12.5, 4.5))
-    norm = mcolors.Normalize(*ESCALA_CHL)
+    norm = mcolors.Normalize(*escala)
 
     im0 = _pintar(ejes[0], mejor.chl, CMAP_CHL, norm,
                   f"Fecha más limpia\n{mejor.fecha} · media {min(medias):.1f} µg/L")
@@ -175,34 +195,43 @@ def figura_vista_original(clave_lago: str, escenas: list[Escena]) -> None:
         fontsize=13, fontweight="bold", y=1.0,
     )
     fig.tight_layout()
-    guardar(
-        fig, DIR_FIGURAS / f"03_vista_cyanolakes_{clave_lago}.png",
-        nota="En la vista de la derecha, el azul indica agua limpia y los tonos verdes, "
-             "amarillos y rojos indican concentraciones crecientes de clorofila-a.",
-    )
+    # Sin nota al pie: en el informe esta figura ya lleva su propio pie, y dos
+    # explicaciones seguidas de lo mismo solo estorban.
+    guardar(fig, DIR_FIGURAS / f"03_vista_cyanolakes_{clave_lago}.png")
 
 
-def mapa_persistencia(clave_lago: str, escenas: list[Escena]) -> np.ndarray:
+def mapa_persistencia(clave_lago: str, escenas: list[Escena], escala) -> np.ndarray:
     """Frecuencia con que cada punto del lago supera el umbral de floración.
 
     Un punto que aparece alto en casi todas las fechas es una zona persistente
     de acumulación, y suele delatar una fuente continua de nutrientes o una
     zona de poca circulación, no un evento aislado.
-    """
-    apilado_alto = np.stack(
-        [np.where(e.mascara, (e.chl >= UMBRAL_FLORACION).astype(float), np.nan)
-         for e in escenas]
-    )
-    frecuencia = 100 * np.nanmean(apilado_alto, axis=0)
 
-    apilado_chl = np.stack([e.chl for e in escenas])
-    promedio = np.nanmean(apilado_chl, axis=0)
+    La comparación es **relativa a cada fecha**: se marca el quinto más afectado
+    del lago ese día y se cuenta en cuántas fechas cada punto cae dentro de él.
+    Un umbral absoluto no serviría aquí, porque en un lago de aguas limpias
+    ningún punto lo alcanzaría nunca y la pregunta —¿siempre se ensucia la misma
+    zona?— quedaría sin responder; y en un lago muy cargado lo alcanzarían casi
+    todos, con el mismo resultado inútil.
+    """
+    capas = []
+    for e in escenas:
+        corte = np.percentile(e.valores, 80)
+        capas.append(np.where(e.mascara, (e.chl >= corte).astype(float), np.nan))
+
+    # Los píxeles de tierra son NaN en todas las fechas; el promedio de una
+    # columna vacía es NaN, que es justo lo que queremos, así que el aviso de
+    # numpy sobra.
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="Mean of empty slice")
+        frecuencia = 100 * np.nanmean(np.stack(capas), axis=0)
+        promedio = np.nanmean(np.stack([e.chl for e in escenas]), axis=0)
 
     fig, ejes = plt.subplots(1, 2, figsize=(10.5, 4.6))
-    im0 = _pintar(ejes[0], promedio, CMAP_CHL, mcolors.Normalize(*ESCALA_CHL),
+    im0 = _pintar(ejes[0], promedio, CMAP_CHL, mcolors.Normalize(*escala),
                   "Promedio de todo el período")
     im1 = _pintar(ejes[1], frecuencia, CMAP_CHL, mcolors.Normalize(0, 100),
-                  f"Persistencia: % de fechas sobre {UMBRAL_FLORACION:.0f} µg/L")
+                  "Persistencia: % de fechas en el quinto\nmás afectado del lago")
 
     for imagen, eje, etiqueta in (
         (im0, ejes[0], "Clorofila-a promedio (µg/L)"),
@@ -222,7 +251,8 @@ def mapa_persistencia(clave_lago: str, escenas: list[Escena]) -> np.ndarray:
     return frecuencia
 
 
-def mapa_interactivo(clave_lago: str, escenas: list[Escena], frecuencia: np.ndarray) -> None:
+def mapa_interactivo(clave_lago: str, escenas: list[Escena], frecuencia: np.ndarray,
+                     escala) -> None:
     """Mapa folium con una capa por fecha más la capa de persistencia."""
     oeste, sur, este, norte = LAGOS[clave_lago]["bbox"]
     centro = [(sur + norte) / 2, (oeste + este) / 2]
@@ -235,7 +265,7 @@ def mapa_interactivo(clave_lago: str, escenas: list[Escena], frecuencia: np.ndar
         attr="Esri World Imagery", name="Satélite", control=True,
     ).add_to(mapa)
 
-    norm = mcolors.Normalize(*ESCALA_CHL)
+    norm = mcolors.Normalize(*escala)
 
     def capa(datos, transform, crs, nombre, cmap, normalizacion, visible):
         reproyectado, limites = _a_wgs84(datos, transform, crs)
@@ -268,12 +298,12 @@ def mapa_interactivo(clave_lago: str, escenas: list[Escena], frecuencia: np.ndar
          f"Persistencia (% de fechas > {UMBRAL_FLORACION:.0f} µg/L)",
          CMAP_CHL, mcolors.Normalize(0, 100), visible=False)
 
-    escala = LinearColormap(
+    barra_escala = LinearColormap(
         colors=[mcolors.to_hex(CMAP_CHL(x)) for x in np.linspace(0, 1, 8)],
-        vmin=ESCALA_CHL[0], vmax=ESCALA_CHL[1],
+        vmin=escala[0], vmax=escala[1],
         caption="Clorofila-a (µg/L) — indicador de cianobacteria",
     )
-    escala.add_to(mapa)
+    barra_escala.add_to(mapa)
 
     folium.GeoJson(
         str(LAGOS[clave_lago]["geojson"]),
@@ -320,14 +350,25 @@ def interpretar(clave_lago: str, escenas: list[Escena], frecuencia: np.ndarray) 
     else:
         reparto = "no hay superficie suficiente para comparar zonas"
 
+    # Concentración de la zona afectada: si el fenómeno fuera puramente
+    # aleatorio, cada punto caería en el quinto más afectado el 20 % de las
+    # veces. Una superficie que lo hace en más de la mitad de las fechas indica
+    # una causa estable y localizada.
+    total = max(int(validos.sum()), 1)
+    apilado_alto = np.stack([e.chl >= UMBRAL_FLORACION for e in escenas])
+    con_floracion = (apilado_alto.any(axis=0)) & validos
+
     return (
-        f"**{nombre}.** Sobre {int(validos.sum()) * area_pixel_km2:.1f} km² de espejo de agua "
-        f"analizados, el {100 * persistente.sum() / max(validos.sum(), 1):.1f} % de la "
-        f"superficie supera el umbral de floración en al menos la mitad de las fechas "
-        f"(zonas persistentes de acumulación), el "
-        f"{100 * ocasional.sum() / max(validos.sum(), 1):.1f} % lo supera solo de forma "
-        f"ocasional y el {100 * nunca.sum() / max(validos.sum(), 1):.1f} % nunca lo supera. "
-        f"Espacialmente, {reparto}."
+        f"**{nombre}.** Sobre {total * area_pixel_km2:.1f} km² de espejo de agua "
+        f"analizados, el {pct(100 * persistente.sum() / total)} de la superficie cae "
+        f"dentro del quinto más afectado del lago en al menos la mitad de las fechas: "
+        f"son las zonas persistentes de acumulación. Si el fenómeno se moviera al azar "
+        f"por el lago, esa cifra rondaría el 0 %, así que cuanto más alta, más fija en el "
+        f"espacio es la afectación. Otro {pct(100 * ocasional.sum() / total)} aparece en "
+        f"ese quinto solo de forma ocasional y el {pct(100 * nunca.sum() / total)} nunca. "
+        f"En términos absolutos, el {pct(100 * con_floracion.sum() / total)} de la "
+        f"superficie llegó a superar los {UMBRAL_FLORACION:.0f} µg/L en alguna de las "
+        f"fechas analizadas. Espacialmente, {reparto}."
     )
 
 
@@ -337,9 +378,10 @@ def ejecutar(escenas_por_lago: dict[str, list[Escena]]) -> dict[str, np.ndarray]
     for clave, escenas in escenas_por_lago.items():
         print(f"  {LAGOS[clave]['nombre']}")
         figura_vista_original(clave, escenas)
-        mapas_todas_las_fechas(clave, escenas)
-        mapa_comparativo(clave, escenas)
-        frecuencia = mapa_persistencia(clave, escenas)
-        mapa_interactivo(clave, escenas, frecuencia)
+        escala = escala_lago(escenas)
+        mapas_todas_las_fechas(clave, escenas, escala)
+        mapa_comparativo(clave, escenas, escala)
+        frecuencia = mapa_persistencia(clave, escenas, escala)
+        mapa_interactivo(clave, escenas, frecuencia, escala)
         persistencias[clave] = frecuencia
     return persistencias

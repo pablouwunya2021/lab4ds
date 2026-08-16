@@ -13,6 +13,7 @@ import pandas as pd
 from src.carga import UMBRAL_FLORACION, Escena
 from src.config import DIR_FIGURAS, DIR_TABLAS, LAGOS, RESOLUCION_M
 from src.estilo import COLOR_LAGO, CRITICO, MARCADOR_LAGO, TINTA_SEC, TINTA_TENUE, guardar
+from src.formato import pct
 
 # Un segundo corte, más severo, para separar "floración" de "floración intensa".
 UMBRAL_INTENSO = 25.0
@@ -213,12 +214,28 @@ def interpretar(df: pd.DataFrame) -> str:
         pendiente = float(np.polyfit(dias, d["chl_medio"].to_numpy(), 1)[0]) * 365
         variabilidad = d["chl_medio"].std(ddof=0) / max(d["chl_medio"].mean(), 1e-9)
 
+        # La tendencia se reporta con cautela deliberada: con 11 fechas mal
+        # repartidas entre estaciones, una pendiente puede ser un artefacto de
+        # qué meses quedaron sin nubes, no un cambio real del lago. Se avisa
+        # cuando una estación está claramente subrepresentada.
+        n_lluviosa = int((d["estacion"] == "Lluviosa").sum())
+        n_seca = int((d["estacion"] == "Seca").sum())
+        desbalance = min(n_lluviosa, n_seca) <= 2
+
+        advertencia = ""
         if abs(pendiente) < 0.5:
             tendencia = "se mantiene estable en el conjunto del período"
-        elif pendiente > 0:
-            tendencia = f"muestra una tendencia al alza (+{pendiente:.1f} µg/L por año)"
         else:
-            tendencia = f"muestra una tendencia a la baja ({pendiente:.1f} µg/L por año)"
+            direccion = "al alza" if pendiente > 0 else "a la baja"
+            tendencia = f"muestra una tendencia {direccion} ({pendiente:+.1f} µg/L por año)"
+            if desbalance:
+                advertencia = (
+                    f" Esa pendiente no debe leerse como un empeoramiento real del lago: "
+                    f"de las {len(d)} fechas, solo {min(n_lluviosa, n_seca)} corresponde a "
+                    f"una de las dos estaciones, y cae al final de la serie, de modo que "
+                    f"con estos datos la tendencia y el efecto estacional son "
+                    f"indistinguibles."
+                )
 
         regimen = (
             "con oscilaciones fuertes entre fechas" if variabilidad > 0.35
@@ -238,10 +255,10 @@ def interpretar(df: pd.DataFrame) -> str:
         lineas.append(
             f"**{nombre}.** El índice promedio va de {minimo['chl_medio']:.1f} µg/L "
             f"({minimo['fecha']}) a {maximo['chl_medio']:.1f} µg/L ({maximo['fecha']}); "
-            f"{tendencia}, {regimen}. "
+            f"{tendencia}, {regimen}.{advertencia} "
             f"Fechas críticas (por encima de la media del lago más una desviación): "
             f"{', '.join(picos['fecha']) if len(picos) else 'ninguna'}. "
-            f"En su fecha más afectada, el {maximo['pct_area_alta']:.1f} % del espejo "
+            f"En su fecha más afectada, el {pct(maximo['pct_area_alta'])} del espejo "
             f"de agua superó los {UMBRAL_FLORACION:.0f} µg/L. {estacional}"
         )
 
