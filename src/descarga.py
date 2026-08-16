@@ -34,7 +34,7 @@ from src.config import (
     FECHAS,
     LAGOS,
     RESOLUCION_M,
-    SENTINEL2_L2A_CDSE,
+    SENTINEL2_L1C_CDSE,
     obtener_config,
 )
 from src.evalscripts import (
@@ -47,7 +47,7 @@ from src.evalscripts import (
 # resolución de 20 m sea real y que las áreas se puedan calcular directamente.
 CRS_TRABAJO = CRS("32615")
 
-NOMBRES_BANDAS = ["chl", "ndci", "ndvi", "ndwi", "fai", "agua", "scl", "datamask"]
+NOMBRES_BANDAS = ["chl", "ndci", "ndvi", "ndwi", "fai", "agua", "clp", "datamask"]
 
 
 def bbox_lago(clave_lago: str) -> BBox:
@@ -66,7 +66,7 @@ def _pedir(evalscript: str, bbox: BBox, tamano, fecha: str, config, mime):
         evalscript=evalscript,
         input_data=[
             SentinelHubRequest.input_data(
-                data_collection=SENTINEL2_L2A_CDSE,
+                data_collection=SENTINEL2_L1C_CDSE,
                 time_interval=intervalo,
                 mosaicking_order="leastCC",
             )
@@ -158,7 +158,7 @@ def probar_conexion(config) -> None:
     bbox = bbox_lago("Amatitlan")
     resultados = list(
         catalogo.search(
-            SENTINEL2_L2A_CDSE,
+            SENTINEL2_L1C_CDSE,
             bbox=bbox,
             time=("2026-02-01", "2026-02-10"),
             fields={"include": ["id", "properties.datetime"], "exclude": []},

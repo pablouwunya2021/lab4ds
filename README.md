@@ -50,7 +50,10 @@ El archivo `.env` está en `.gitignore`: las credenciales nunca se versionan.
 
 ## Datos
 
-- **Misión:** Sentinel-2 (L2A, reflectancia de superficie)
+- **Misión:** Sentinel-2 **L1C** (reflectancia en el tope de la atmósfera), que es el
+  nivel para el que fue calibrado el script de cianobacteria. Se verificó que sobre
+  L2A el detector de agua del script solo reconoce el 26 % del lago de Amatitlán,
+  frente al 99 % sobre L1C (ver la nota en `src/config.py`).
 - **Resolución de trabajo:** 20 m
 - **Fechas:** las 11 fechas oficiales por lago indicadas en el enunciado
 - **Índice de cianobacteria:** script

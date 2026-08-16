@@ -115,7 +115,14 @@ def obtener_config() -> SHConfig:
     return config
 
 
-# Colección Sentinel-2 L2A servida por el CDSE (reflectancia a nivel de suelo).
-SENTINEL2_L2A_CDSE = DataCollection.SENTINEL2_L2A.define_from(
-    "s2l2a_cdse", service_url=URL_BASE_SH
+# Colección Sentinel-2 L1C servida por el CDSE.
+#
+# Se usa L1C y no L2A porque el script de cianobacteria de CyanoLakes está
+# calibrado sobre reflectancia en el tope de la atmósfera. Se comprobó
+# empíricamente sobre Amatitlán (2026-02-07): con L2A el detector de agua del
+# script reconoce apenas 3.6 km² de los 14.8 km² del lago (26 %), porque la
+# corrección atmosférica deja el agua tan oscura que los umbrales de MNDWI y
+# DBSI dejan de cumplirse; con L1C reconoce 14.6 km² (99 %).
+SENTINEL2_L1C_CDSE = DataCollection.SENTINEL2_L1C.define_from(
+    "s2l1c_cdse", service_url=URL_BASE_SH
 )

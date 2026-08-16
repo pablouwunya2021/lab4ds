@@ -11,6 +11,7 @@ Uso:
 
 from __future__ import annotations
 
+import json
 import sys
 from datetime import datetime
 
@@ -56,6 +57,30 @@ def main() -> int:
     print("\nEjercicio 8 — análisis exploratorio adicional")
     percentiles = exploratorio.ejecutar(escenas_por_lago, serie)
     texto_exploratorio = exploratorio.interpretar(serie, percentiles)
+
+    # Volcado de métricas y textos para que el informe final se arme sobre
+    # números reales y no haya que recalcular nada al generarlo.
+    resultados = {
+        "generado": datetime.now().isoformat(timespec="seconds"),
+        "n_escenas": {c: len(v) for c, v in escenas_por_lago.items()},
+        "serie": serie.drop(columns=["fecha_dt"]).to_dict(orient="records"),
+        "resumen_lagos": resumen.to_dict(orient="records"),
+        "prueba_diferencia": prueba,
+        "correlacion_por_fecha": corr_fecha.to_dict(orient="records"),
+        "correlacion_por_pixel": corr_pixel.to_dict(orient="records"),
+        "percentiles": percentiles.to_dict(orient="records"),
+        "textos": {
+            "temporal": texto_temporal,
+            "espacial": texto_espacial,
+            "correlacion": texto_correlacion,
+            "comparacion": texto_comparacion,
+            "exploratorio": texto_exploratorio,
+        },
+    }
+    (RAIZ / "informe" / "resultados.json").write_text(
+        json.dumps(resultados, indent=2, ensure_ascii=False, default=float),
+        encoding="utf-8",
+    )
 
     destino = RAIZ / "informe" / "hallazgos.md"
     destino.write_text(

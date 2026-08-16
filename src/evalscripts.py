@@ -13,17 +13,20 @@ https://custom-scripts.sentinel-hub.com/custom-scripts/sentinel-2/cyanobacteria_
 "CyanoLakes Chlorophyll-a" — Jeremy Kravitz & Mark Matthews (2020).
 Detección de cuerpos de agua acreditada a Mohor Gartner.
 
-Nota metodológica: el script original está publicado para Sentinel-2 L1C
-(reflectancia en el tope de la atmósfera). Aquí se aplica sobre L2A
-(reflectancia de superficie, corregida atmosféricamente), que es la que
-recomienda Copernicus para estudios cuantitativos de calidad de agua. Los
-valores absolutos de clorofila-a pueden desplazarse respecto a la versión L1C,
-pero los patrones espaciales y temporales —que es lo que analiza este
-laboratorio— se conservan y quedan mejor comparables entre fechas.
+Nota metodológica: el script se aplica sobre Sentinel-2 **L1C**, que es el
+nivel de procesamiento para el que fue publicado y calibrado. Ver la nota en
+`config.py` sobre por qué L2A no funciona con este detector de agua.
 """
 
-# Bandas comunes a ambos scripts.
-_BANDAS = '["B02","B03","B04","B05","B07","B08","B8A","B11","B12","SCL","dataMask"]'
+# Entrada común a ambos scripts. Las bandas ópticas se piden en reflectancia
+# (que es lo que esperan las fórmulas del script); la probabilidad de nube
+# (CLP, de s2cloudless) es una capa auxiliar que el API sirve en su escala
+# original de 0 a 255.
+_ENTRADA = """{
+    bands: ["B02","B03","B04","B05","B07","B08","B8A","B11","B12","CLP","dataMask"],
+    units: ["REFLECTANCE","REFLECTANCE","REFLECTANCE","REFLECTANCE","REFLECTANCE",
+            "REFLECTANCE","REFLECTANCE","REFLECTANCE","REFLECTANCE","DN","DN"]
+  }"""
 
 # Bloque compartido: detección de agua, FAI, NDCI y clorofila-a.
 _NUCLEO_CYANO = """
@@ -66,7 +69,7 @@ EVALSCRIPT_INDICES = f"""//VERSION=3
 // Devuelve los índices como valores numéricos para análisis posterior.
 function setup() {{
   return {{
-    input: [{{ bands: {_BANDAS}, units: "REFLECTANCE" }}],
+    input: [{_ENTRADA}],
     output: {{ id: "default", bands: 8, sampleType: "FLOAT32" }}
   }};
 }}
@@ -83,9 +86,9 @@ function evaluatePixel(s) {{
   // Banda 1: clorofila-a (ug/L) — proxy de biomasa de cianobacteria
   // Banda 2: NDCI          Banda 3: NDVI        Banda 4: NDWI
   // Banda 5: FAI (algas flotantes)              Banda 6: máscara de agua 0/1
-  // Banda 7: SCL (clasificación de escena, para filtrar nubes y sombras)
+  // Banda 7: CLP (probabilidad de nube 0-255, para filtrar nubes)
   // Banda 8: dataMask (1 = píxel con dato válido)
-  return [chl, ndciv, ndvi, ndwi, faiv, agua, s.SCL, s.dataMask];
+  return [chl, ndciv, ndvi, ndwi, faiv, agua, s.CLP, s.dataMask];
 }}
 """
 
@@ -96,7 +99,7 @@ EVALSCRIPT_CYANO_RGB = f"""//VERSION=3
 // Script original "CyanoLakes Chlorophyll-a" con su rampa de color.
 function setup() {{
   return {{
-    input: [{{ bands: {_BANDAS}, units: "REFLECTANCE" }}],
+    input: [{_ENTRADA}],
     output: {{ id: "default", bands: 3, sampleType: "AUTO" }}
   }};
 }}
@@ -154,15 +157,12 @@ BANDAS_INDICES = {
     "ndwi": 4,
     "fai": 5,
     "agua": 6,
-    "scl": 7,
+    "clp": 7,
     "datamask": 8,
 }
 
-# Clases de la Scene Classification Layer (SCL) de Sentinel-2 L2A que hay que
-# descartar: nube y sombra de nube; el resto se conserva.
-SCL_DESCARTAR = {
-    3,   # sombra de nube
-    8,   # nube probabilidad media
-    9,   # nube probabilidad alta
-    10,  # cirros finos
-}
+# Umbral de nubosidad sobre la banda CLP (probabilidad de nube de s2cloudless,
+# escalada de 0 a 255). 102 equivale a un 40 % de probabilidad: por encima de
+# eso el píxel se descarta. Es un corte conservador — sobre agua limpia la CLP
+# medida ronda 1, así que descarta nubes reales sin comerse el lago.
+CLP_MAXIMO = 102

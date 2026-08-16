@@ -17,7 +17,7 @@ from rasterio.features import geometry_mask
 
 from src.config import FECHAS, LAGOS
 from src.descarga import ruta_indices
-from src.evalscripts import BANDAS_INDICES, SCL_DESCARTAR
+from src.evalscripts import BANDAS_INDICES, CLP_MAXIMO
 
 # Valores de clorofila-a fuera de este rango se consideran artefactos del
 # ajuste polinómico (el NDCI satura en píxeles de orilla y en reflejos).
@@ -60,26 +60,55 @@ class Escena:
         return self.chl[self.mascara]
 
 
-@lru_cache(maxsize=4)
-def mascara_lago(clave_lago: str) -> np.ndarray:
-    """Máscara del polígono del lago rasterizada sobre la grilla de trabajo.
+def _rutas_disponibles(clave_lago: str) -> list:
+    rutas = [
+        ruta_indices(clave_lago, fecha)
+        for fecha, _nub, _sat in FECHAS[clave_lago]
+        if ruta_indices(clave_lago, fecha).exists()
+    ]
+    if not rutas:
+        raise FileNotFoundError(
+            f"No hay ningún ráster de {clave_lago}. Corré primero: python -m src.descarga"
+        )
+    return rutas
 
-    El geojson del enunciado es el rectángulo del área de interés, así que por
-    sí solo no recorta el agua. La delimitación fina del cuerpo de agua la hace
-    la máscara espectral del script (banda `agua`); esta función solo asegura
-    que no se analice nada fuera del área de interés declarada.
+
+@lru_cache(maxsize=4)
+def mascara_area_interes(clave_lago: str) -> np.ndarray:
+    """Rectángulo del área de interés del enunciado, rasterizado a la grilla.
+
+    El geojson provisto es el bounding box, no la orilla del lago, así que por
+    sí solo no recorta el agua: solo garantiza que no se analice nada fuera del
+    área declarada.
     """
-    fecha_ref = FECHAS[clave_lago][0][0]
-    with rasterio.open(ruta_indices(clave_lago, fecha_ref)) as src:
-        forma = (src.height, src.width)
-        transform = src.transform
-        crs = src.crs
+    with rasterio.open(_rutas_disponibles(clave_lago)[0]) as src:
+        forma, transform, crs = (src.height, src.width), src.transform, src.crs
 
     gdf = gpd.read_file(LAGOS[clave_lago]["geojson"]).to_crs(crs)
-    dentro = geometry_mask(
-        gdf.geometry, out_shape=forma, transform=transform, invert=True
-    )
-    return dentro
+    return geometry_mask(gdf.geometry, out_shape=forma, transform=transform, invert=True)
+
+
+@lru_cache(maxsize=4)
+def mascara_lago(clave_lago: str) -> np.ndarray:
+    """Espejo de agua estable del lago: el dominio común a todas las fechas.
+
+    Se define como el conjunto de píxeles que el detector de agua del script
+    clasifica como agua en al menos la mitad de las fechas disponibles. Fijar
+    un dominio único es importante: si cada fecha se analizara sobre los
+    píxeles que ella misma detecta como agua, los promedios y los mapas de
+    diferencia entre fechas estarían comparando superficies distintas, y una
+    variación del contorno del lago se confundiría con un cambio en la
+    floración.
+    """
+    rutas = _rutas_disponibles(clave_lago)
+    conteo = None
+    for ruta in rutas:
+        with rasterio.open(ruta) as src:
+            agua = (src.read(BANDAS_INDICES["agua"]) > 0.5) & (
+                src.read(BANDAS_INDICES["datamask"]) > 0
+            )
+        conteo = agua.astype("int32") if conteo is None else conteo + agua
+    return (conteo >= len(rutas) / 2) & mascara_area_interes(clave_lago)
 
 
 def cargar_escena(clave_lago: str, fecha: str) -> Escena | None:
@@ -92,14 +121,14 @@ def cargar_escena(clave_lago: str, fecha: str) -> Escena | None:
         bandas = {n: src.read(i).astype("float64") for n, i in BANDAS_INDICES.items()}
         transform, crs, forma = src.transform, src.crs, (src.height, src.width)
 
-    # Cadena de filtros: dato válido -> agua -> sin nube/sombra -> rango físico.
+    # Cadena de filtros: espejo de agua estable -> dato válido -> sin nube ->
+    # valor físicamente plausible.
     valido = bandas["datamask"] > 0
-    agua = bandas["agua"] > 0.5
-    sin_nube = ~np.isin(np.rint(bandas["scl"]).astype(int), list(SCL_DESCARTAR))
+    sin_nube = bandas["clp"] <= CLP_MAXIMO
     chl = bandas["chl"]
     rango = np.isfinite(chl) & (chl >= CHL_MIN) & (chl <= CHL_MAX)
 
-    mascara = valido & agua & sin_nube & rango & mascara_lago(clave_lago)
+    mascara = mascara_lago(clave_lago) & valido & sin_nube & rango
 
     def enmascarar(arr: np.ndarray) -> np.ndarray:
         salida = np.full_like(arr, np.nan, dtype="float64")
