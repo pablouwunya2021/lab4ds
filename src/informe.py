@@ -195,19 +195,25 @@ def tabla_datos(encabezados, filas, estilos, anchos=None) -> Table:
     return tabla
 
 
-def encabezado_pie(canvas, doc):
-    """Numeración y línea de pie en todas las páginas menos la portada."""
-    canvas.saveState()
-    if doc.page > 1:
-        canvas.setStrokeColor(LINEA)
-        canvas.setLineWidth(0.5)
-        canvas.line(2 * cm, 1.7 * cm, A4[0] - 2 * cm, 1.7 * cm)
-        canvas.setFont("Helvetica", 8)
-        canvas.setFillColor(TINTA_TENUE)
-        canvas.drawString(2 * cm, 1.25 * cm,
-                          "Monitoreo satelital de cianobacteria — Atitlán y Amatitlán")
-        canvas.drawRightString(A4[0] - 2 * cm, 1.25 * cm, f"Página {doc.page}")
-    canvas.restoreState()
+def pie_de(rotulo: str):
+    """Devuelve la función de pie de página con el rótulo indicado."""
+
+    def dibujar(canvas, doc):
+        canvas.saveState()
+        if doc.page > 1:
+            canvas.setStrokeColor(LINEA)
+            canvas.setLineWidth(0.5)
+            canvas.line(2 * cm, 1.7 * cm, A4[0] - 2 * cm, 1.7 * cm)
+            canvas.setFont("Helvetica", 8)
+            canvas.setFillColor(TINTA_TENUE)
+            canvas.drawString(2 * cm, 1.25 * cm, rotulo)
+            canvas.drawRightString(A4[0] - 2 * cm, 1.25 * cm, f"Página {doc.page}")
+        canvas.restoreState()
+
+    return dibujar
+
+
+encabezado_pie = pie_de("Monitoreo satelital de cianobacteria — Atitlán y Amatitlán")
 
 
 # --------------------------------------------------------------------------- #
