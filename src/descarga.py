@@ -30,7 +30,7 @@ from sentinelhub import (
 )
 
 from src.config import (
-    DIR_RAW,
+    DIR_RAW, DIR_ML_RAW,
     FECHAS,
     LAGOS,
     RESOLUCION_M,
@@ -41,6 +41,8 @@ from src.evalscripts import (
     EVALSCRIPT_CYANO_RGB,
     EVALSCRIPT_INDICES,
     EVALSCRIPT_RGB,
+    EVALSCRIPT_ML_V1,
+    ML_BAND_NAMES,
 )
 
 # Ambos lagos caen en la zona UTM 15 norte. Trabajar en metros hace que la
@@ -116,6 +118,34 @@ def ruta_rgb(clave_lago: str, fecha: str) -> Path:
     return DIR_RAW / f"{clave_lago}_{fecha}_rgb.tif"
 
 
+def ruta_ml(clave_lago: str, fecha: str) -> Path:
+    return DIR_ML_RAW / f"{clave_lago}_{fecha}_ml_v1.tif"
+
+
+def _guardar_geotiff_nombrado(arreglo, bbox, destino, nombres) -> None:
+    _guardar_geotiff(arreglo, bbox, destino)
+    with rasterio.open(destino, "r+") as dst:
+        for i, nombre in enumerate(nombres, 1):
+            dst.set_band_description(i, nombre)
+
+
+def descargar_ml_fecha(clave_lago: str, fecha: str, config, forzar: bool = False) -> bool:
+    """Descarga ML v1 sin alterar los artefactos de Parte 1."""
+    destino = ruta_ml(clave_lago, fecha)
+    if destino.exists() and not forzar:
+        print(f"  {clave_lago} {fecha}: ML v1 ya descargado")
+        return True
+    bbox = bbox_lago(clave_lago)
+    tamano = bbox_to_dimensions(bbox, resolution=RESOLUCION_M)
+    datos = _pedir(EVALSCRIPT_ML_V1, bbox, tamano, fecha, config, MimeType.TIFF)
+    if datos is None or datos.shape[-1] != len(ML_BAND_NAMES):
+        print(f"  {clave_lago} {fecha}: producto ML inválido")
+        return False
+    _guardar_geotiff_nombrado(datos.astype("float32"), bbox, destino, ML_BAND_NAMES)
+    print(f"  {clave_lago} {fecha}: ML v1 OK")
+    return True
+
+
 def descargar_fecha(clave_lago: str, fecha: str, config, forzar: bool = False) -> bool:
     """Descarga los tres productos de un lago en una fecha. True si hubo datos."""
     bbox = bbox_lago(clave_lago)
@@ -173,6 +203,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Descarga de rásters Sentinel-2")
     parser.add_argument("--probar", action="store_true", help="solo probar conexión")
     parser.add_argument("--forzar", action="store_true", help="re-descargar todo")
+    parser.add_argument("--ml", action="store_true", help="descarga producto ML v1")
     args = parser.parse_args()
 
     config = obtener_config()
@@ -187,7 +218,8 @@ def main() -> int:
         for fecha, _nubosidad, _sat in FECHAS[clave_lago]:
             total += 1
             try:
-                if descargar_fecha(clave_lago, fecha, config, forzar=args.forzar):
+                funcion = descargar_ml_fecha if args.ml else descargar_fecha
+                if funcion(clave_lago, fecha, config, forzar=args.forzar):
                     obtenidas += 1
             except Exception as exc:  # noqa: BLE001
                 print(f"  {clave_lago} {fecha}: ERROR -> {exc}")
