@@ -97,6 +97,17 @@ def evaluate_validations(data: pd.DataFrame, max_train_rows=100000):
             prob = fitted.predict_proba(test[features])[:, 1]
             rows.append({"strategy": f"cross_lake_{source}_to_{target}", "fold": 1,
                          "model": name, **classification_metrics(test["alta_presencia"], prob)})
+    for lake in LAGOS:
+        subset = data[data["lake"].eq(lake)]
+        tr_l, te_l = train_test_split(range(len(subset)), test_size=.30,
+                                      stratify=subset["alta_presencia"], random_state=SEED)
+        train = deterministic_sample(subset.iloc[tr_l], max_train_rows, SEED)
+        test = subset.iloc[te_l]
+        for name, (model, _) in specs.items():
+            fitted = clone(model).fit(train[features], train["alta_presencia"])
+            prob = fitted.predict_proba(test[features])[:, 1]
+            rows.append({"strategy": f"within_lake_{lake}", "fold": 1, "model": name,
+                         **classification_metrics(test["alta_presencia"], prob)})
     result = pd.DataFrame(rows)
     result.to_csv(DIR_PARTE2_METRICS / "validation_metrics_by_fold.csv", index=False)
     summary = (result.groupby(["strategy", "model"], dropna=False)

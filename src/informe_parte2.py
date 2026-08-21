@@ -49,13 +49,14 @@ def main() -> int:
     winner = random.sort_values(["pr_auc", "recall"], ascending=False).iloc[0]
     temporal = validations[(validations.strategy == "temporal") & (validations.model == winner.model)].iloc[0]
     transfer = validations[validations.strategy.str.startswith("cross_lake") & validations.model.eq(winner.model)]
+    within = validations[validations.strategy.str.startswith("within_lake") & validations.model.eq(winner.model)]
     sections = [
         ("Objetivos y alcance", "Se desarrollan tres clasificadores y se contrastan evaluaciones aleatoria, espacial, temporal y entre lagos. La respuesta es una categoría operativa derivada de un proxy satelital; no mide toxicidad ni sustituye muestreo de campo."),
         ("Preparación y limpieza", "Cada fila conserva lago, fecha, celda raster, coordenadas WGS84/UTM 15N y metadatos. Todos los descartes se registran; no se eliminan observaciones silenciosamente."),
         ("Linaje de la respuesta", "NDCI=(B05−B04)/(B05+B04); clorofila-a proxy=826.57·NDCI³−176.43·NDCI²+19·NDCI+4.071; categoría alta=1 si proxy≥10 µg/L. El corte no equivale a concentración de cianobacterias ni riesgo toxicológico confirmado."),
         ("Modelos e hiperparámetros", "Regresión logística, Random Forest e HistGradientBoosting se implementan en pipelines. La búsqueda usa solo entrenamiento, PR-AUC como criterio y un test 30% común que no participa en decisiones."),
         ("Criterio ambiental", f"La regla previa exige precisión mínima 0.80 y, entre modelos elegibles, prioriza PR-AUC y recall. Ganó {winner.model}: PR-AUC={winner.pr_auc:.3f}, precisión={winner.precision:.3f}, recall={winner.recall:.3f}. Los falsos negativos pueden retrasar verificación de campo; los falsos positivos consumen recursos operativos."),
-        ("Comparación de validaciones", f"El ganador obtuvo recall temporal={temporal.recall:.3f}, frente a {winner.recall:.3f} en la división aleatoria. Esta caída evidencia dependencia temporal. En transferencia entre lagos sus recalls fueron " + ", ".join(f"{r.strategy.replace('cross_lake_','')}: {r.recall:.3f}" for _, r in transfer.iterrows()) + "."),
+        ("Comparación de validaciones", f"El ganador obtuvo recall temporal={temporal.recall:.3f}, frente a {winner.recall:.3f} en la división aleatoria. Esta caída evidencia dependencia temporal. Dentro de cada lago sus recalls fueron " + ", ".join(f"{r.strategy.replace('within_lake_','')}: {r.recall:.3f}" for _, r in within.iterrows()) + "; en transferencia fueron " + ", ".join(f"{r.strategy.replace('cross_lake_','')}: {r.recall:.3f}" for _, r in transfer.iterrows()) + "."),
         ("Limitaciones", "Once fechas por lago, autocorrelación, dominio espectral distinto, nubes y una respuesta construida del mismo sensor limitan inferencia y generalización. Importancia no implica causalidad. Se requiere validación in situ de clorofila, composición taxonómica y toxinas."),
         ("Referencias", "Mishra & Mishra (2012), DOI 10.1016/j.rse.2011.10.016. WHO (2021), Guidelines on recreational water quality, ISBN 9789240031302. US EPA (2019), Recommendations for Cyanobacteria and Cyanotoxin Monitoring in Recreational Waters. Kravitz & Matthews (2020), CyanoLakes custom script."),
         ("Reproducibilidad", "Comandos: python -m src.descarga --ml; python -m src.parte2; pytest -q; jupyter nbconvert --execute --to notebook --inplace notebooks/laboratorio4_parte2.ipynb; python -m src.informe_parte2."),
@@ -66,7 +67,7 @@ def main() -> int:
               PageBreak(), Paragraph("Bitácora de filtros", styles["Heading1"]), _table(filters),
               PageBreak(), Paragraph("Evaluación 70/30", styles["Heading1"]), _table(random[["model","accuracy","balanced_accuracy","precision","recall","f1","roc_auc","pr_auc"]].round(4)),
               Paragraph("Validaciones espacial, temporal y entre lagos", styles["Heading1"]),
-              _table(validations[["strategy","fold","model","balanced_accuracy","precision","recall","f1","pr_auc"]].round(4), 24)]
+              _table(validations[["strategy","fold","model","balanced_accuracy","precision","recall","f1","pr_auc"]].round(4), 36)]
     for path, caption in [
         (DIR_PARTE2_FIGURES/"confusion_matrices.png", "Matrices de confusión sobre el test común 30%."),
         (DIR_PARTE2_FIGURES/"spatial_blocks.png", "Bloques espaciales regulares de 1 km."),
