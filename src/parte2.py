@@ -40,7 +40,7 @@ def build_dataset() -> pd.DataFrame:
     return data
 
 
-def train_random(data: pd.DataFrame, max_train_rows=200000):
+def train_random(data: pd.DataFrame, max_train_rows=100000):
     features = strict_feature_columns(data); y = data["alta_presencia"]
     train_idx, test_idx = train_test_split(range(len(data)), test_size=.30, stratify=y,
                                            random_state=SEED)
@@ -62,7 +62,7 @@ def train_random(data: pd.DataFrame, max_train_rows=200000):
     return result
 
 
-def evaluate_validations(data: pd.DataFrame, max_train_rows=200000):
+def evaluate_validations(data: pd.DataFrame, max_train_rows=100000):
     """Espacial por fold, temporal y transferencia; destino nunca participa en ajuste."""
     features = strict_feature_columns(data); rows = []
     specs = model_specs()
@@ -115,6 +115,9 @@ def main() -> int:
     args = parser.parse_args()
     data_path = DIR_PARTE2_DATA / "observations_master.parquet"
     data = pd.read_parquet(data_path) if data_path.exists() else build_dataset()
+    # Artefacto pequeño y normativo: siempre se regenera para no quedar obsoleto
+    # cuando cambia el contrato de predictores pero el Parquet sigue siendo válido.
+    predictor_audit().to_csv(DIR_PARTE2_TABLES / "predictor_audit.csv", index=False)
     if not args.build_only:
         train_random(data)
         evaluate_validations(data)

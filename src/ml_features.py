@@ -7,12 +7,12 @@ import pandas as pd
 TARGET = "alta_presencia"
 TRACE_COLUMNS = ["chl", "ndci", TARGET]
 # y=f(poly(NDCI)); NDCI usa B04/B05. NDVI usa B04 y se excluye conservadoramente.
-LEAKAGE_COLUMNS = {"chl", "ndci", TARGET, "B04", "B05", "ndvi"}
+LEAKAGE_COLUMNS = {"chl", "ndci", TARGET, "B04", "B05", "ndvi", "fai"}
 IDENTIFIER_COLUMNS = {
     "observation_id", "lake", "date", "row", "col", "lon", "lat", "x_utm",
     "y_utm", "spatial_block", "clp", "datamask", "agua",
 }
-STRICT_FEATURES = ["B02", "B03", "B07", "B08", "B8A", "B11", "B12", "ndwi", "fai",
+STRICT_FEATURES = ["B02", "B03", "B07", "B08", "B8A", "B11", "B12", "ndwi",
                    "doy_sin", "doy_cos", "rainy_season"]
 
 
@@ -43,6 +43,7 @@ def predictor_audit() -> pd.DataFrame:
         "B04": "componente directo de NDCI; también de NDVI y FAI",
         "B05": "componente directo de NDCI",
         "ndvi": "comparte B04 con NDCI; exclusión conservadora",
+        "fai": "comparte B04 con NDCI; exclusión conservadora",
         "lon/lat/x_utm/y_utm": "puede memorizar lago o zonas; solo agrupación/mapas",
         "lake": "identifica dominio; solo segmentación y experimentos",
     }

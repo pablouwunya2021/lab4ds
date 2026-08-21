@@ -20,7 +20,7 @@ def model_specs():
         ),
         "random_forest": (
             Pipeline([("imputer", SimpleImputer(strategy="median")),
-                      ("model", RandomForestClassifier(n_estimators=300, class_weight="balanced_subsample",
+                      ("model", RandomForestClassifier(n_estimators=150, class_weight="balanced_subsample",
                                                        n_jobs=-1, random_state=SEED))]),
             {"model__max_depth": [8, 16, None], "model__min_samples_leaf": [1, 5]},
         ),

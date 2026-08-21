@@ -21,5 +21,9 @@ def shap_summary(model, X: pd.DataFrame, output, max_rows=2000, seed=3084) -> No
     estimator = model[-1]
     explainer = shap.Explainer(estimator, transformed, feature_names=list(X.columns))
     values = explainer(transformed)
+    # Los clasificadores binarios de sklearn pueden devolver (n, p, 2).
+    # La explicación académicamente relevante es la salida de la clase positiva.
+    if values.values.ndim == 3:
+        values = values[:, :, 1]
     shap.summary_plot(values, transformed, feature_names=list(X.columns), show=False)
     plt.tight_layout(); plt.savefig(output, dpi=180, bbox_inches="tight"); plt.close()
