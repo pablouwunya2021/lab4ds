@@ -13,7 +13,10 @@ __pycache__/
 # Datos crudos descargados (pesados, reproducibles con src/descarga.py)
 data/raw/*.tif
 data/raw/*.tiff
+data/raw_ml_v1/
 data/cache/
+outputs/parte2/data/*.parquet
+outputs/parte2/models/
 
 # Sistema
 .DS_Store

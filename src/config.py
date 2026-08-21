@@ -23,8 +23,20 @@ DIR_SALIDA = RAIZ / "outputs"
 DIR_FIGURAS = DIR_SALIDA / "figuras"
 DIR_MAPAS = DIR_SALIDA / "mapas"
 DIR_TABLAS = DIR_SALIDA / "tablas"
+DIR_ML_RAW = DIR_DATOS / "raw_ml_v1"
+DIR_PARTE2 = DIR_SALIDA / "parte2"
+DIR_PARTE2_DATA = DIR_PARTE2 / "data"
+DIR_PARTE2_FIGURES = DIR_PARTE2 / "figures"
+DIR_PARTE2_MAPS = DIR_PARTE2 / "maps"
+DIR_PARTE2_TABLES = DIR_PARTE2 / "tables"
+DIR_PARTE2_METRICS = DIR_PARTE2 / "metrics"
+DIR_PARTE2_MODELS = DIR_PARTE2 / "models"
 
-for _d in (DIR_RAW, DIR_FIGURAS, DIR_MAPAS, DIR_TABLAS):
+for _d in (
+    DIR_RAW, DIR_FIGURAS, DIR_MAPAS, DIR_TABLAS, DIR_ML_RAW,
+    DIR_PARTE2_DATA, DIR_PARTE2_FIGURES, DIR_PARTE2_MAPS,
+    DIR_PARTE2_TABLES, DIR_PARTE2_METRICS, DIR_PARTE2_MODELS,
+):
     _d.mkdir(parents=True, exist_ok=True)
 
 # --------------------------------------------------------------------------- #

@@ -149,6 +149,29 @@ function evaluatePixel(s) {
 }
 """
 
+# Producto ML v1: reflectancias originales y derivados. El orden es parte del
+# contrato y se escribe como descripción de banda en cada GeoTIFF.
+ML_BAND_NAMES = [
+    "B02", "B03", "B04", "B05", "B07", "B08", "B8A", "B11", "B12",
+    "ndvi", "ndwi", "ndci", "chl", "fai", "agua", "clp", "datamask",
+]
+EVALSCRIPT_ML_V1 = f"""//VERSION=3
+function setup() {{
+  return {{input: [{_ENTRADA}], output: {{bands: 17, sampleType: "FLOAT32"}}}};
+}}
+{_NUCLEO_CYANO}
+function evaluatePixel(s) {{
+  let agua=wbi(s.B04,s.B03,s.B02,s.B08,s.B11,s.B12);
+  let fai=FAI(s.B04,s.B07,s.B8A);
+  let ndci=NDCI(s.B04,s.B05);
+  let chl=826.57*Math.pow(ndci,3)-176.43*Math.pow(ndci,2)+19*ndci+4.071;
+  let ndvi=(s.B08-s.B04)/(s.B08+s.B04);
+  let ndwi=(s.B03-s.B08)/(s.B03+s.B08);
+  return [s.B02,s.B03,s.B04,s.B05,s.B07,s.B08,s.B8A,s.B11,s.B12,
+          ndvi,ndwi,ndci,chl,fai,agua,s.CLP,s.dataMask];
+}}
+"""
+
 # Índice de cada banda dentro del GeoTIFF que produce EVALSCRIPT_INDICES.
 BANDAS_INDICES = {
     "chl": 1,       # clorofila-a (ug/L) — proxy de cianobacteria

@@ -35,6 +35,22 @@ El archivo `.env` está en `.gitignore`: las credenciales nunca se versionan.
 .venv/bin/python -m src.analisis            # genera figuras, mapas y tablas
 ```
 
+### Parte 2 — Machine Learning
+
+Los GeoTIFF de Parte 1 contienen índices derivados, no reflectancias originales. El producto
+`ML v1` agrega B02, B03, B04, B05, B07, B08, B8A, B11 y B12 sin reemplazar Parte 1:
+
+```bash
+.venv/bin/python -m src.descarga --ml       # regenera solo rasters ML faltantes
+.venv/bin/python -m src.parte2              # dataset, modelos y validaciones
+.venv/bin/pytest -q                         # pruebas sintéticas; no descargan datos
+jupyter nbconvert --execute --to notebook --inplace notebooks/laboratorio4_parte2.ipynb
+.venv/bin/python -m src.informe_parte2      # PDF a partir de artefactos
+```
+
+El modelo principal excluye variables derivadas de la respuesta y sus bandas constitutivas.
+Consulte la matriz auditable en `docs/rubric-coverage-parte2.md`.
+
 ## Estructura
 
 | Ruta | Contenido |
