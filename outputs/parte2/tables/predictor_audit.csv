@@ -1,0 +1,21 @@
+variable,permitido_modelo_principal,razon
+chl,False,transformación directa de NDCI y fuente de y
+ndci,False,fuente directa del proxy continuo
+alta_presencia,False,variable respuesta
+B04,False,componente directo de NDCI; también de NDVI y FAI
+B05,False,componente directo de NDCI
+ndvi,False,comparte B04 con NDCI; exclusión conservadora
+fai,False,comparte B04 con NDCI; exclusión conservadora
+lon/lat/x_utm/y_utm,False,puede memorizar lago o zonas; solo agrupación/mapas
+lake,False,identifica dominio; solo segmentación y experimentos
+B02,True,no participa directamente en NDCI según el linaje declarado
+B03,True,no participa directamente en NDCI según el linaje declarado
+B07,True,no participa directamente en NDCI según el linaje declarado
+B08,True,no participa directamente en NDCI según el linaje declarado
+B8A,True,no participa directamente en NDCI según el linaje declarado
+B11,True,no participa directamente en NDCI según el linaje declarado
+B12,True,no participa directamente en NDCI según el linaje declarado
+ndwi,True,no participa directamente en NDCI según el linaje declarado
+doy_sin,True,no participa directamente en NDCI según el linaje declarado
+doy_cos,True,no participa directamente en NDCI según el linaje declarado
+rainy_season,True,no participa directamente en NDCI según el linaje declarado
